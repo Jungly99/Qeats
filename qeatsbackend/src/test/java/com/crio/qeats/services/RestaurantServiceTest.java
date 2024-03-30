@@ -1,4 +1,5 @@
 
+
 /*
  *
  *  * Copyright (c) Crio.Do 2019. All rights reserved
@@ -33,7 +34,6 @@ import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
-import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ActiveProfiles;
 
 // TODO: CRIO_TASK_MODULE_RESTAURANTSAPI
@@ -45,7 +45,6 @@ import org.springframework.test.context.ActiveProfiles;
 
 @SpringBootTest(classes = {QEatsApplication.class})
 @MockitoSettings(strictness = Strictness.STRICT_STUBS)
-@DirtiesContext
 @ActiveProfiles("test")
 class RestaurantServiceTest {
 
@@ -101,9 +100,25 @@ class RestaurantServiceTest {
     // 2. If the expected restaurants are being returned
     // HINT: Use the `loadRestaurantsDuringNormalHours` utility method to speed things up
 
-
-     assertFalse(false);
+    List<Restaurant> restaurants = loadRestaurantsDuringNormalHours();
+    when(restaurantRepositoryServiceMock
+        .findAllRestaurantsCloseBy(any(Double.class), any(Double.class), any(LocalTime.class),
+            any(Double.class)))
+        .thenReturn(restaurants);
+    GetRestaurantsResponse allRestaurantsCloseBy = restaurantService
+        .findAllRestaurantsCloseBy(new GetRestaurantsRequest(20.0, 30.0), LocalTime.of(22, 0));
+    assertEquals(3, allRestaurantsCloseBy.getRestaurants().size());
+    assertEquals("10", allRestaurantsCloseBy.getRestaurants().get(0).getRestaurantId());
+    assertEquals("11", allRestaurantsCloseBy.getRestaurants().get(1).getRestaurantId());
+    assertEquals("12", allRestaurantsCloseBy.getRestaurants().get(2).getRestaurantId());
+    ArgumentCaptor<Double> servingRadiusInKms = ArgumentCaptor.forClass(Double.class);
+    verify(restaurantRepositoryServiceMock, times(1))
+        .findAllRestaurantsCloseBy(any(Double.class), any(Double.class), any(LocalTime.class),
+            servingRadiusInKms.capture());
+    assertEquals(servingRadiusInKms.getValue().toString(), "5.0");
   }
+
+
 
 
 
