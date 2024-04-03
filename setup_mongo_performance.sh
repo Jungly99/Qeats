@@ -1,32 +1,15 @@
-// CRIO_SOLUTION_AND_STUB_START_MODULE_SERIALIZATION
-// CRIO_SOLUTION_AND_STUB_END_MODULE_SERIALIZATION
+
 #!/bin/bash
 
 lat=12.9
 lng=77.8
-
-source coordinates.txt
-
-if test $latitude
-then
+while read -r latitude longitude
+do
     lat=$latitude
-else
-  echo "latitude value not set in coordinates.txt, using default"
-  echo $'\e[32;1mPlease read this FAQ for more details - https://forum.crio.do/t/14751'
-fi
-
-if test $longitude
-then
     lng=$longitude
-else
-    echo "$longitude value not set in coordinates.txt, using default"
-    echo $'\e[32;1mPlease read this FAQ for more details - https://forum.crio.do/t/14751'
-fi
+done < coordinates.txt
 
-echo -e "Please note down location coordinates which we are populating data for - \n( latitude = $lat, longiyide = $lng )"
-echo "If you think this is incorrect, check your coordinates.txt file."
-echo $'\e[32;1mPlease read this FAQ for more details - https://forum.crio.do/t/14751'
-
+echo "Your coordinates latitude/longitude are: " $lat $lng
 
 cd ~/workspace
 # Either clone or pull latest.
@@ -39,7 +22,7 @@ else
     git pull
 fi
 
-if systemctl status mongod | grep active > /dev/null; then
+if systemctl status mongodb.service | grep active > /dev/null; then
     echo "MongoDB is running..."
 else
     echo "MongoDB not running; Exiting"
