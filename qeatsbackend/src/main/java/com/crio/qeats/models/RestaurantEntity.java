@@ -10,6 +10,7 @@ import java.util.ArrayList;
 import java.util.List;
 import javax.validation.constraints.NotNull;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
@@ -50,5 +51,22 @@ public class RestaurantEntity {
   @NotNull
   private List<String> attributes = new ArrayList<>();
 
-}
+  public String getOpensAt() {
+    return opensAt;
+  }
 
+  public String getClosesAt() {
+    return closesAt;
+  }
+
+  public Double getLatitude() {
+    return latitude;
+  }
+
+  public Double getLongitude() {
+    return longitude;
+  }
+
+
+
+}
