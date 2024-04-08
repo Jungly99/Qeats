@@ -3,6 +3,7 @@ package com.crio.qeats.repositoryservices;
 
 import com.crio.qeats.dto.Restaurant;
 import com.crio.qeats.utils.FixtureHelpers;
+import com.crio.qeats.utils.GeoUtils;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
@@ -14,11 +15,6 @@ import java.util.concurrent.ThreadLocalRandom;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
-@Service
-
-// CRIO_UNCOMMENT_ONLY_START_MODULE_RESTAURANTSAPI
-// @Service
-// CRIO_UNCOMMENT_ONLY_END_MODULE_RESTAURANTSAPI
 public class RestaurantRepositoryServiceDummyImpl implements RestaurantRepositoryService {
   private static final String FIXTURES = "fixtures/exchanges";
   private ObjectMapper objectMapper = new ObjectMapper();
@@ -40,6 +36,7 @@ public class RestaurantRepositoryServiceDummyImpl implements RestaurantRepositor
   public List<Restaurant> findAllRestaurantsCloseBy(Double latitude, Double longitude,
       LocalTime currentTime, Double servingRadiusInKms) {
     List<Restaurant> restaurantList = new ArrayList<>();
+    List<Restaurant> myList = new ArrayList<Restaurant>();
     try {
       restaurantList = loadRestaurantsDuringNormalHours();
     } catch (IOException e) {
@@ -49,7 +46,36 @@ public class RestaurantRepositoryServiceDummyImpl implements RestaurantRepositor
       restaurant.setLatitude(latitude + ThreadLocalRandom.current().nextDouble(0.000001, 0.2));
       restaurant.setLongitude(longitude + ThreadLocalRandom.current().nextDouble(0.000001, 0.2));
     }
-    return restaurantList;
+    for (Restaurant res : restaurantList) {
+      double restaurantLat = res.getLatitude();
+      double restaurantLon = res.getLongitude();
+      LocalTime openAt = LocalTime.parse(res.getOpensAt());
+      LocalTime closeAt = LocalTime.parse(res.getClosesAt());
+      double distanceKm = GeoUtils.findDistanceInKm(
+                            latitude, longitude, restaurantLat, restaurantLon);
+      if (Double.compare(distanceKm, servingRadiusInKms) > 0) {
+        continue;
+      }
+      boolean result = isValidTime(currentTime, openAt, closeAt);
+      if (result == false) {
+        continue;
+      }
+      myList.add(res);
+
+    }
+    return myList;
+  }
+
+  private boolean isValidTime(LocalTime current, 
+                              LocalTime open, LocalTime close) {
+    boolean result = false;
+    if (current.equals(open) || current.equals(close)) {
+      result = true;
+    }
+    if (current.isAfter(open) && current.isBefore(close)) {
+      result = true;
+    }
+    return result;
   }
 
 
