@@ -18,6 +18,7 @@ import java.nio.charset.StandardCharsets;
  */
 public class FixtureHelpers {
 
+  //comment
   private FixtureHelpers() { /* singleton */ }
 
   /**
