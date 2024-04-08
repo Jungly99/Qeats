@@ -7,7 +7,6 @@
 package com.crio.qeats.repositoryservices;
 
 import ch.hsr.geohash.GeoHash;
-import com.crio.qeats.configs.RedisConfiguration;
 import com.crio.qeats.dto.Restaurant;
 import com.crio.qeats.globals.GlobalConstants;
 import com.crio.qeats.models.RestaurantEntity;
@@ -26,24 +25,26 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.Future;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import javax.inject.Provider;
 import org.modelmapper.ModelMapper;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.annotation.Primary;
+//import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.dao.DataAccessException;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.scheduling.annotation.AsyncResult;
 import org.springframework.stereotype.Service;
 
-@Primary
+
 @Service
 public class RestaurantRepositoryServiceImpl implements RestaurantRepositoryService {
 
-  @Autowired
-  private RedisConfiguration redisConfiguration;
+
+
 
   @Autowired
   private MongoTemplate mongoTemplate;
@@ -51,8 +52,8 @@ public class RestaurantRepositoryServiceImpl implements RestaurantRepositoryServ
   @Autowired
   private Provider<ModelMapper> modelMapperProvider;
 
-  @Autowired 
-  private RestaurantRepository restaurantRepository;
+  @Autowired
+  private RestaurantRepository dataSet;
 
   private boolean isOpenNow(LocalTime time, RestaurantEntity res) {
     LocalTime openingTime = LocalTime.parse(res.getOpensAt());
@@ -61,79 +62,68 @@ public class RestaurantRepositoryServiceImpl implements RestaurantRepositoryServ
     return time.isAfter(openingTime) && time.isBefore(closingTime);
   }
 
-  @Override
+  // TODO: CRIO_TASK_MODULE_NOSQL
+  // Objectives:
+  // 1. Implement findAllRestaurantsCloseby.
+  // 2. Remember to keep the precision of GeoHash in mind while using it as a key.
+  // Check RestaurantRepositoryService.java file for the interface contract.
   public List<Restaurant> findAllRestaurantsCloseBy(Double latitude,
-      Double longitude, LocalTime currentTime, Double servingRadiusInKms) { 
-    if (redisConfiguration.isCacheAvailable()) {
-      return findAllRestaurantsCache(latitude, longitude, currentTime, servingRadiusInKms);
-    } else { 
-      return findAllRestaurantsMongo(latitude, longitude, currentTime, servingRadiusInKms);
-    }
-  }
+      Double longitude, LocalTime currentTime, Double servingRadiusInKms) 
+      throws NullPointerException {
 
-
-  public List<Restaurant> findAllRestaurantsMongo(Double latitude,
-      Double longitude, LocalTime currentTime, Double servingRadiusInKms) {
-    System.out.println("------in MONGO function -------");
-    List<Restaurant> restaurants = new ArrayList<Restaurant>();
-    ObjectMapper objectMapper = new ObjectMapper();
-
-    List<RestaurantEntity> allRestaurants = restaurantRepository.findAll();
+    List<Restaurant> restaurants = new ArrayList<>();
+    List<RestaurantEntity> tmp = new ArrayList<RestaurantEntity>();
+    List<Restaurant> myList = new ArrayList<Restaurant>();
+    try {
+      tmp = dataSet.findAll();
       
-    for (RestaurantEntity restaurantEntity : allRestaurants) {
-      if (isRestaurantCloseByAndOpen(restaurantEntity, currentTime,
-          latitude, longitude, servingRadiusInKms)) {
-        Restaurant restaurant = modelMapperProvider.get().map(restaurantEntity,Restaurant.class);
-        restaurants.add(restaurant);
+    } catch (NullPointerException e) {
+      e.printStackTrace();
+    }
+    ModelMapper mapperClass = modelMapperProvider.get();
+    for (RestaurantEntity ent : tmp) {
+      restaurants.add(mapperClass.map(ent, Restaurant.class));
+    }
+    // System.out.println();
+
+    for (Restaurant res : restaurants) {
+      double restaurantLat = res.getLatitude();
+      double restaurantLon = res.getLongitude();
+      LocalTime openAt = LocalTime.parse(res.getOpensAt());
+      LocalTime closeAt = LocalTime.parse(res.getClosesAt());
+      double distanceKm = GeoUtils.findDistanceInKm(
+                            latitude, longitude, restaurantLat, restaurantLon);
+      if (Double.compare(distanceKm, servingRadiusInKms) > 0) {
+        continue;
       }
-    }
+      boolean result = isValidTime(currentTime, openAt, closeAt);
+      if (result == false) {
+        continue;
+      }
+      myList.add(res);
 
-    String restaurantDbString = "";
-    redisConfiguration.initCache();
-    try {
-      restaurantDbString = objectMapper.writeValueAsString(restaurants);
-    } catch (IOException e) {
-      e.printStackTrace();
     }
-    System.out.print(restaurantDbString);
-
-    GeoLocation geoLocation = new GeoLocation(latitude,longitude);
-    GeoHash geoHash = GeoHash.withCharacterPrecision(geoLocation.getLatitude(),
-        geoLocation.getLongitude(),7);
-    Jedis jedis = redisConfiguration.getJedisPool().getResource();
-    jedis.set(geoHash.toBase32(),restaurantDbString);
-    return restaurants;
+    return myList;
   }
 
-  private List<Restaurant> findAllRestaurantsCache(Double latitude,
-      Double longitude, LocalTime currentTime, Double servingRadiusInKms) {
-    System.out.println("------in JEDIS function -----------");
-    List<Restaurant> restaurants = new ArrayList<Restaurant>();
-    GeoLocation geoLocation = new GeoLocation(latitude,longitude);
-    GeoHash geoHash = GeoHash.withCharacterPrecision(geoLocation.getLatitude(),
-        geoLocation.getLongitude(), 7);
-
-    Jedis jedis = redisConfiguration.getJedisPool().getResource();
-
-    if (!jedis.exists(geoHash.toBase32())) {
-      return findAllRestaurantsMongo(latitude, longitude, currentTime, servingRadiusInKms);
+  private boolean isValidTime(LocalTime current, 
+                              LocalTime open, LocalTime close) {
+    boolean result = false;
+    if (current.equals(open) || current.equals(close)) {
+      result = true;
     }
-
-    String restaurantString = "";
-
-    ObjectMapper objectMapper = new ObjectMapper();
-
-    try {
-      restaurantString = jedis.get(geoHash.toBase32());
-      restaurants = objectMapper.readValue(restaurantString,
-          new TypeReference<List<Restaurant>>() {});
-    } catch (IOException e) {
-      e.printStackTrace();
+    if (current.isAfter(open) && current.isBefore(close)) {
+      result = true;
     }
-    System.out.print(restaurantString);
-
-    return restaurants;
+    return result;
   }
+
+
+
+  // TODO: CRIO_TASK_MODULE_NOSQL
+  // Objective:
+  // 1. Check if a restaurant is nearby and open. If so, it is a candidate to be returned.
+  // NOTE: How far exactly is "nearby"?
 
   /**
    * Utility method to check if a restaurant is within the serving radius at a given time.
