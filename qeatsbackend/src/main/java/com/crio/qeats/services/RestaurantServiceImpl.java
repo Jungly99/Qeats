@@ -1,3 +1,4 @@
+
 /*
  *
  *  * Copyright (c) Crio.Do 2019. All rights reserved
@@ -10,6 +11,8 @@ import com.crio.qeats.dto.Restaurant;
 import com.crio.qeats.exchanges.GetRestaurantsRequest;
 import com.crio.qeats.exchanges.GetRestaurantsResponse;
 import com.crio.qeats.repositoryservices.RestaurantRepositoryService;
+import com.crio.qeats.repositoryservices.RestaurantRepositoryServiceDummyImpl;
+import com.crio.qeats.utils.GeoUtils;
 import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -29,7 +32,7 @@ public class RestaurantServiceImpl implements RestaurantService {
 
   private final Double peakHoursServingRadiusInKms = 3.0;
   private final Double normalHoursServingRadiusInKms = 5.0;
-  @Autowired
+  // @Autowired(required = true)
   private RestaurantRepositoryService restaurantRepositoryService;
 
 
@@ -38,21 +41,28 @@ public class RestaurantServiceImpl implements RestaurantService {
   @Override
   public GetRestaurantsResponse findAllRestaurantsCloseBy(
       GetRestaurantsRequest getRestaurantsRequest, LocalTime currentTime) {
-    List<Restaurant> restaurant;
-    int h = currentTime.getHour();
-    int m = currentTime.getMinute();
-    if ((h >= 8 && h <= 9) || (h == 10 && m == 0) || (h == 13) || (h == 14 && m == 0) 
-        || (h >= 19 && h <= 20) || (h == 21 && m == 0)) {
-      restaurant = restaurantRepositoryService.findAllRestaurantsCloseBy(
-        getRestaurantsRequest.getLatitude(), getRestaurantsRequest.getLongitude(), 
-        currentTime, peakHoursServingRadiusInKms);
+    
+    double srcLat = getRestaurantsRequest.getLatitude();
+    double srcLon = getRestaurantsRequest.getLongitude();
+    GetRestaurantsResponse responseRestraunts = new GetRestaurantsResponse();
+    if (currentTime.isAfter(LocalTime.of(7,59,59)) && currentTime.isBefore(LocalTime.of(10,0,1))
+        || currentTime.isAfter(LocalTime.of(12,59,59)) && currentTime.isBefore(LocalTime.of(14,0,1))
+        || currentTime.isAfter(LocalTime.of(18,59,59)) 
+        && currentTime.isBefore(LocalTime.of(21,0,1))) {
+    
+      responseRestraunts.setRestaurants(
+          restaurantRepositoryService.findAllRestaurantsCloseBy(srcLat, 
+          srcLon, currentTime, peakHoursServingRadiusInKms));
     } else {
-      restaurant = restaurantRepositoryService.findAllRestaurantsCloseBy(
-      getRestaurantsRequest.getLatitude(), getRestaurantsRequest.getLongitude(), 
-      currentTime, normalHoursServingRadiusInKms);
+      responseRestraunts.setRestaurants(
+          restaurantRepositoryService.findAllRestaurantsCloseBy(srcLat, 
+          srcLon, currentTime, normalHoursServingRadiusInKms));
     }
-    GetRestaurantsResponse response = new GetRestaurantsResponse(restaurant);
-    log.info(response);
-    return response;
+
+    //double distanceInKM = GeoUtils.findDistanceInKm(srcLat, srcLon, dstLatitude, dstLongitude);
+
+    return responseRestraunts;
   }
+
+
 }
