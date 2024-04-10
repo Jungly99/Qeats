@@ -1,4 +1,3 @@
-
 #!/bin/bash
 
 lat=12.9
